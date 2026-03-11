@@ -11,11 +11,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # ШАГ 1: Сначала скачиваем нужный сборщик в пустую папку (чтобы не было конфликтов!)
+      - name: Setup Gradle Wrapper FIRST
+        run: |
+          gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      # ШАГ 2: Только теперь создаем файлы приложения
       - name: Auto-Create Genesis Project
         run: |
           mkdir -p app/src/main/java/com/zartas/genesis
           
-          # 1. Android Manifest
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -31,7 +37,6 @@ jobs:
           </manifest>
           EOF
 
-          # 2. MainActivity.kt
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -77,7 +82,7 @@ jobs:
                           }
                       } catch (e: Exception) {
                           val updated = history.value.toMutableList()
-                          updated[aiMsgIndex] = Msg("Error: \${e.message}", false)
+                          updated[aiMsgIndex] = Msg("Ошибка: \${e.message}", false)
                           history.value = updated
                       }
                   }
@@ -142,7 +147,6 @@ jobs:
           }
           EOF
 
-          # 3. Settings & Gradle
           cat <<EOF > settings.gradle.kts
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -175,12 +179,7 @@ jobs:
           }
           EOF
 
-      - name: Setup Gradle Wrapper
-        run: |
-          # Устанавливаем конкретную версию, чтобы не было конфликтов с Gradle 9.0
-          gradle wrapper --gradle-version 8.2 --distribution-type all
-          chmod +x gradlew
-
+      # ШАГ 3: Запускаем сборку уже правильной, 8.2 версией сборщика
       - name: Build APK
         run: ./gradlew assembleDebug
 
