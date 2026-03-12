@@ -14,15 +14,16 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK with Wrapper
+      - name: Build APK
+        # Указываем путь к папке, если файлы создались внутри подпапки
+        # Если файлы лежат в корне, оставь просто ./
         run: |
-          # Мы больше не вызываем системный gradle. 
-          # Мы используем тот, что уже лежит в твоем репозитории.
           chmod +x gradlew
           ./gradlew assembleDebug
+        continue-on-error: false
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Fixed
-          path: app/build/outputs/apk/debug/*.apk
+          name: Genesis-3.1-Final
+          path: "**/build/outputs/apk/debug/*.apk"
