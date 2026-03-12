@@ -1,26 +1,24 @@
-name: Genesis Final Fix
+name: Genesis Total Reset
 on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+        with: { java-version: '17', distribution: 'temurin' }
       - uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: 8.4
+        with: { gradle-version: 8.4 }
 
-      - name: Build App
+      - name: Build
         run: |
+          # 1. Удаляем ВСЕ старое
           rm -rf app/build settings.gradle.kts build.gradle.kts gradle.properties
+          
+          # 2. Чистые конфиги
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
-
+          
           cat <<EOF > settings.gradle.kts
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -44,17 +42,16 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 22
-                  versionName = "2.2-FINAL"
+                  versionCode = 30
+                  versionName = "3.0-STABLE"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
               composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
-              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-              kotlinOptions { jvmTarget = "17" }
           }
           dependencies {
-              implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+              // ВАЖНО: используем версию 0.7.0, она была самой стабильной по эндпоинтам
+              implementation("com.google.ai.client.generativeai:generativeai:0.7.0")
               implementation("androidx.activity:activity-compose:1.8.2")
               implementation(platform("androidx.compose:compose-bom:2023.10.01"))
               implementation("androidx.compose.ui:ui")
@@ -69,62 +66,47 @@ jobs:
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.setContent
           import androidx.compose.foundation.layout.*
-          import androidx.compose.foundation.lazy.*
-          import androidx.compose.foundation.shape.*
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Send
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
-          import androidx.compose.ui.*
-          import androidx.compose.ui.draw.clip
-          import androidx.compose.ui.graphics.Color
-          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.Modifier
           import com.google.ai.client.generativeai.GenerativeModel
           import kotlinx.coroutines.launch
 
           class MainActivity : ComponentActivity() {
               override fun onCreate(s: Bundle?) {
                   super.onCreate(s)
+                  // Используем просто "gemini-1.5-flash" без суффиксов
                   val model = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = BuildConfig.API_KEY)
                   setContent {
                       val scope = rememberCoroutineScope()
-                      val history = remember { mutableStateListOf<Pair<String, Boolean>>() }
-                      var input by remember { mutableStateOf("") }
-
+                      var response by remember { mutableStateOf("Нажми кнопку...") }
+                      
                       MaterialTheme(colorScheme = darkColorScheme()) {
-                          Column(Modifier.fillMaxSize().padding(16.dp)) {
-                              Text("Genesis 2.2", style = MaterialTheme.typography.headlineMedium)
-                              LazyColumn(Modifier.weight(1f)) {
-                                  items(history) { m ->
-                                      Text(m.first, color = if(m.second) Color.Cyan else Color.White, modifier = Modifier.padding(8.dp))
-                                  }
-                              }
-                              Row(Modifier.fillMaxWidth()) {
-                                  TextField(input, { input = it }, Modifier.weight(1f))
-                                  IconButton(onClick = {
-                                      val txt = input; input = ""; history.add(txt to true)
-                                      scope.launch {
-                                          try {
-                                              val res = model.generateContent(txt)
-                                              history.add((res.text ?: "Пусто") to false)
-                                          } catch (e: Exception) {
-                                              history.add("Ошибка: \${e.localizedMessage}" to false)
-                                          }
+                          Column(Modifier.fillMaxSize()) {
+                              Text(response, modifier = Modifier.weight(1f))
+                              Button(onClick = {
+                                  response = "Думаю..."
+                                  scope.launch {
+                                      try {
+                                          val res = model.generateContent("Привет!")
+                                          response = res.text ?: "Пусто"
+                                      } catch (e: Exception) {
+                                          response = "ОШИБКА: \${e.localizedMessage}"
                                       }
-                                  }) { Icon(Icons.Default.Send, null) }
-                              }
+                                  }
+                              }) { Text("ТЕСТ API") }
                           }
                       }
                   }
               }
           }
           EOF
-          gradle wrapper --gradle-version 8.4
+          
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-Final
+          name: Genesis-3.0
           path: "**/build/outputs/apk/debug/*.apk"
