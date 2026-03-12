@@ -16,9 +16,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create Project Structure
+      - name: Full Project Generation
         run: |
-          # 1. Сначала создаем файлы настроек, чтобы Gradle не ругался
+          # 1. Сначала создаем ВСЕ необходимые папки
+          mkdir -p app/src/main/java/com/zartas/genesis
+          mkdir -p app/src/main/res/values
+          
+          # 2. Генерируем все файлы проекта сразу
           cat <<EOF > settings.gradle.kts
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -29,12 +33,6 @@ jobs:
           plugins { id("com.android.application") version "8.2.0" apply false; id("org.jetbrains.kotlin.android") version "1.9.0" apply false }
           EOF
 
-          # 2. Теперь Gradle увидит проект и создаст wrapper
-          gradle wrapper --gradle-version 8.2
-
-          # 3. Создаем остальную структуру
-          mkdir -p app/src/main/java/com/zartas/genesis
-          
           cat <<EOF > app/build.gradle.kts
           plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
           android {
@@ -69,7 +67,6 @@ jobs:
           </manifest>
           EOF
 
-          # Возвращаем наш полный код MainActivity с выбором моделей 3.1
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -100,30 +97,25 @@ jobs:
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Msg>>(emptyList())
               var selectedModelName by mutableStateOf("gemini-3.1-pro-preview")
-              
               fun send(p: String) {
                   if (p.isBlank()) return
-                  val currentModel = GenerativeModel(
-                      modelName = selectedModelName,
-                      apiKey = BuildConfig.API_KEY,
-                      requestOptions = RequestOptions(apiVersion = "v1beta")
-                  )
+                  val model = GenerativeModel(modelName = selectedModelName, apiKey = BuildConfig.API_KEY, requestOptions = RequestOptions(apiVersion = "v1beta"))
                   history.value += Msg(p, true)
-                  val aiMsgIndex = history.value.size
+                  val idx = history.value.size
                   history.value += Msg("...", false)
                   viewModelScope.launch {
-                      var fullResp = ""
+                      var res = ""
                       try {
-                          currentModel.generateContentStream(p).collect { chunk ->
-                              fullResp += chunk.text ?: ""
-                              val updated = history.value.toMutableList()
-                              updated[aiMsgIndex] = Msg(fullResp, false)
-                              history.value = updated
+                          model.generateContentStream(p).collect { chunk ->
+                              res += chunk.text ?: ""
+                              val list = history.value.toMutableList()
+                              list[idx] = Msg(res, false)
+                              history.value = list
                           }
                       } catch (e: Exception) {
-                          val updated = history.value.toMutableList()
-                          updated[aiMsgIndex] = Msg("Error: \${e.message}", false)
-                          history.value = updated
+                          val list = history.value.toMutableList()
+                          list[idx] = Msg("Error: \${e.message}", false)
+                          history.value = list
                       }
                   }
               }
@@ -144,41 +136,39 @@ jobs:
 
           @Composable
           fun ChatScreen(vm: ChatVM = viewModel()) {
-              val messages by vm.history.collectAsState()
+              val msgs by vm.history.collectAsState()
               var input by remember { mutableStateOf("") }
-              val listState = rememberLazyListState()
-              var expanded by remember { mutableStateOf(false) }
+              val state = rememberLazyListState()
+              var exp by remember { mutableStateOf(false) }
               val models = listOf("gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview")
 
-              LaunchedEffect(messages.size) { if(messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) }
-
               Column(modifier = Modifier.fillMaxSize().imePadding()) {
-                  Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                  Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                       Text("Genesis 3.1", style = MaterialTheme.typography.headlineMedium, color = Color.White)
                       Box {
-                          Surface(color = Color(0xFF2B2B2B), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { expanded = true }) {
+                          Surface(color = Color(0xFF2B2B2B), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { exp = true }) {
                               Row(modifier = Modifier.padding(8.dp)) {
                                   Text(vm.selectedModelName.replace("gemini-", "").uppercase(), color = Color.Cyan)
                                   Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Cyan)
                               }
                           }
-                          DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                              models.forEach { m -> DropdownMenuItem(text = { Text(m) }, onClick = { vm.selectedModelName = m; expanded = false }) }
+                          DropdownMenu(expanded = exp, onDismissRequest = { exp = false }) {
+                              models.forEach { m -> DropdownMenuItem(text = { Text(m) }, onClick = { vm.selectedModelName = m; exp = false }) }
                           }
                       }
                   }
-                  LazyColumn(state = listState, modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                      items(messages) { m ->
+                  LazyColumn(state = state, modifier = Modifier.weight(1f).padding(8.dp)) {
+                      items(msgs) { m ->
                           val align = if (m.isUser) Alignment.End else Alignment.Start
-                          Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = align) {
-                              Surface(color = if (m.isUser) Color(0xFF303030) else Color(0xFF1E1E1E), shape = RoundedCornerShape(16.dp)) {
-                                  Text(m.text, modifier = Modifier.padding(12.dp), color = Color.White)
+                          Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = align) {
+                              Surface(color = if (m.isUser) Color(0xFF303030) else Color(0xFF1E1E1E), shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(4.dp)) {
+                                  Text(m.text, modifier = Modifier.padding(10.dp), color = Color.White)
                               }
                           }
                       }
                   }
                   Row(modifier = Modifier.padding(16.dp)) {
-                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("Ask Genesis...") }, shape = RoundedCornerShape(24.dp))
+                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(20.dp))
                       FloatingActionButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }, containerColor = Color(0xFFD1E3FF)) {
                           Icon(Icons.Default.Send, contentDescription = null, tint = Color.Black)
                       }
@@ -187,12 +177,15 @@ jobs:
           }
           EOF
 
+          # 3. И только теперь, когда всё готово, создаем wrapper
+          gradle wrapper --gradle-version 8.2
+
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Fix: Create project before gradle wrapper" || echo "No changes"
+          git commit -m "Genesis 3.1: Final Build fix" || echo "No changes"
           git push origin HEAD:main
 
       - name: Build APK
@@ -203,5 +196,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Release
+          name: Genesis-3.1-Final-APK
           path: app/build/outputs/apk/debug/*.apk
