@@ -21,18 +21,13 @@ jobs:
 
       - name: Clean and Rebuild
         run: |
-          # 1. Полная зачистка старых следов
           rm -rf app/build settings.gradle.kts build.gradle.kts gradle.properties
           
-          # 2. Включаем AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-          # 3. Настройка репозиториев
           cat <<EOF > settings.gradle.kts
-          pluginManagement {
-              repositories { google(); mavenCentral(); gradlePluginPortal() }
-          }
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
               repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories { google(); mavenCentral() }
@@ -41,7 +36,6 @@ jobs:
           include(":app")
           EOF
 
-          # 4. Конфигурация приложения
           mkdir -p app
           cat <<EOF > app/build.gradle.kts
           plugins {
@@ -55,8 +49,8 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 20
-                  versionName = "2.0-ELITE"
+                  versionCode = 21
+                  versionName = "1.5-FLASH-STABLE"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
@@ -74,7 +68,6 @@ jobs:
           }
           EOF
 
-          # 5. Исходный код чата (с моделью 2.0 Flash)
           mkdir -p app/src/main/java/com/zartas/genesis
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
@@ -101,9 +94,9 @@ jobs:
 
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-              // Используем Gemini 2.0 Flash Experimental - она мощнее и стабильнее сейчас
+              // Самая стабильная модель для API на текущий момент
               private val model = GenerativeModel(
-                  modelName = "gemini-2.0-flash-exp", 
+                  modelName = "gemini-1.5-flash", 
                   apiKey = BuildConfig.API_KEY
               )
 
@@ -146,7 +139,7 @@ jobs:
                   Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                       Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF4285F4))
                       Spacer(Modifier.width(8.dp))
-                      Text("Genesis 2.0 Elite", style = MaterialTheme.typography.headlineSmall)
+                      Text("Genesis Stable", style = MaterialTheme.typography.headlineSmall)
                   }
                   LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                       items(msgs) { m ->
@@ -158,16 +151,7 @@ jobs:
                       }
                   }
                   Row(modifier = Modifier.padding(16.dp).imePadding(), verticalAlignment = Alignment.CenterVertically) {
-                      TextField(
-                          value = input, 
-                          onValueChange = { input = it }, 
-                          modifier = Modifier.weight(1f).clip(CircleShape), 
-                          placeholder = { Text("Запрос к Genesis...") },
-                          colors = TextFieldDefaults.colors(
-                              focusedIndicatorColor = Color.Transparent,
-                              unfocusedIndicatorColor = Color.Transparent
-                          )
-                      )
+                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f).clip(CircleShape), placeholder = { Text("Запрос...") })
                       IconButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }) {
                           Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFFD1E3FF))
                       }
@@ -176,7 +160,6 @@ jobs:
           }
           EOF
 
-          # 6. Сборка через Gradle Wrapper
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew clean assembleDebug
@@ -184,5 +167,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-2.0-Elite
+          name: Genesis-Stable-Build
           path: "**/build/outputs/apk/debug/*.apk"
