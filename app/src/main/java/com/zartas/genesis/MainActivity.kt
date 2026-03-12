@@ -1,0 +1,128 @@
+package com.zartas.genesis
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.RequestOptions
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
+
+data class Msg(val text: String, val isUser: Boolean)
+
+class ChatVM : ViewModel() {
+    val history = MutableStateFlow<List<Msg>>(emptyList())
+    var selectedModelName by mutableStateOf("gemini-3.1-pro-preview")
+    
+    fun send(p: String) {
+        if (p.isBlank()) return
+        // ИСПРАВЛЕНИЕ: Добавляем v1beta для работы с моделями 3.1
+        val currentModel = GenerativeModel(
+            modelName = selectedModelName,
+            apiKey = BuildConfig.API_KEY,
+            requestOptions = RequestOptions(apiVersion = "v1beta")
+        )
+        
+        history.value += Msg(p, true)
+        val aiMsgIndex = history.value.size
+        history.value += Msg("...", false)
+
+        viewModelScope.launch {
+            var fullResp = ""
+            try {
+                currentModel.generateContentStream(p).collect { chunk ->
+                    fullResp += chunk.text ?: ""
+                    val updated = history.value.toMutableList()
+                    updated[aiMsgIndex] = Msg(fullResp, false)
+                    history.value = updated
+                }
+            } catch (e: Exception) {
+                val updated = history.value.toMutableList()
+                updated[aiMsgIndex] = Msg("Ошибка: ${e.message}", false)
+                history.value = updated
+            }
+        }
+    }
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(s: Bundle?) {
+        super.onCreate(s)
+        setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF131314)) {
+                    ChatScreen()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatScreen(vm: ChatVM = viewModel()) {
+    val messages by vm.history.collectAsState()
+    var input by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    var expanded by remember { mutableStateOf(false) }
+    val latestModels = listOf("gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview")
+
+    LaunchedEffect(messages.size) { 
+        if(messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) 
+    }
+
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Genesis 3.1", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Box {
+                Surface(color = Color(0xFF2B2B2B), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { expanded = true }) {
+                    Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(vm.selectedModelName.replace("gemini-", "").uppercase(), color = Color.Cyan)
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Cyan)
+                    }
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    latestModels.forEach { model ->
+                        DropdownMenuItem(text = { Text(model) }, onClick = { vm.selectedModelName = model; expanded = false })
+                    }
+                }
+            }
+        }
+        
+        LazyColumn(state = listState, modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            items(messages) { m ->
+                val align = if (m.isUser) Alignment.End else Alignment.Start
+                val color = if (m.isUser) Color(0xFF303030) else Color(0xFF1E1E1E)
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = align) {
+                    Surface(color = color, shape = RoundedCornerShape(16.dp)) {
+                        Text(m.text, modifier = Modifier.padding(12.dp), color = Color.White)
+                    }
+                }
+            }
+        }
+
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("Запрос к 3.1...") }, shape = RoundedCornerShape(24.dp))
+            FloatingActionButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }, containerColor = Color(0xFFD1E3FF)) {
+                Icon(Icons.Default.Send, contentDescription = null, tint = Color.Black)
+            }
+        }
+    }
+}
