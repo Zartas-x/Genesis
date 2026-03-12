@@ -11,13 +11,14 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ШАГ 1: Сначала скачиваем нужный сборщик в пустую папку (чтобы не было конфликтов!)
-      - name: Setup Gradle Wrapper FIRST
+      # ШАГ 1: Обманываем систему пустой настройкой
+      - name: Trick Gradle 9.3.1
         run: |
+          touch settings.gradle.kts
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
 
-      # ШАГ 2: Только теперь создаем файлы приложения
+      # ШАГ 2: Теперь, когда у нас есть сборщик 8.2, заливаем код!
       - name: Auto-Create Genesis Project
         run: |
           mkdir -p app/src/main/java/com/zartas/genesis
@@ -179,7 +180,7 @@ jobs:
           }
           EOF
 
-      # ШАГ 3: Запускаем сборку уже правильной, 8.2 версией сборщика
+      # ШАГ 3: Собираем проект
       - name: Build APK
         run: ./gradlew assembleDebug
 
