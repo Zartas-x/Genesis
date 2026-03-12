@@ -1,4 +1,4 @@
-name: Genesis Total Reset
+name: Genesis Total Reset 3.2
 on: [push]
 jobs:
   build:
@@ -8,7 +8,6 @@ jobs:
       - uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
       
-      # Устанавливаем Gradle официально, чтобы создать wrapper
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with: { gradle-version: 8.4 }
@@ -33,7 +32,7 @@ jobs:
           include(":app")
           EOF
 
-          # 4. Build.gradle.kts (Откат на стабильную 0.7.0)
+          # 4. Build.gradle.kts (Откат на стабильную 0.7.0 для борьбы с 404)
           mkdir -p app
           cat <<EOF > app/build.gradle.kts
           plugins {
@@ -47,8 +46,8 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 31
-                  versionName = "3.1-STABLE"
+                  versionCode = 32
+                  versionName = "3.2-STABLE"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
@@ -65,7 +64,7 @@ jobs:
           }
           EOF
 
-          # 5. Исходный код
+          # 5. Исходный код (исправлены все импорты и dp)
           mkdir -p app/src/main/java/com/zartas/genesis
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
@@ -77,6 +76,7 @@ jobs:
           import androidx.compose.runtime.*
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.unit.dp
           import com.google.ai.client.generativeai.GenerativeModel
           import kotlinx.coroutines.launch
 
@@ -97,7 +97,7 @@ jobs:
                                           response = "Связываюсь с сервером..."
                                           scope.launch {
                                               try {
-                                                  val res = model.generateContent("Test")
+                                                  val res = model.generateContent("Test message")
                                                   response = res.text ?: "Ответ получен, но он пустой"
                                               } catch (e: Exception) {
                                                   response = "ОШИБКА: \${e.localizedMessage}"
@@ -114,7 +114,7 @@ jobs:
           }
           EOF
           
-          # Генерируем gradlew заново
+          # 6. Сборка
           gradle wrapper
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -122,5 +122,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3-1-Test
+          name: Genesis-3-2-Final
           path: "**/build/outputs/apk/debug/*.apk"
