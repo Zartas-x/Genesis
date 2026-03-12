@@ -21,12 +21,14 @@ jobs:
 
       - name: Clean and Rebuild
         run: |
-          # Полная зачистка всех старых следов
+          # 1. Полная зачистка старых следов
           rm -rf app/build settings.gradle.kts build.gradle.kts gradle.properties
           
+          # 2. Включаем AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
+          # 3. Настройка репозиториев
           cat <<EOF > settings.gradle.kts
           pluginManagement {
               repositories { google(); mavenCentral(); gradlePluginPortal() }
@@ -39,6 +41,7 @@ jobs:
           include(":app")
           EOF
 
+          # 4. Конфигурация приложения
           mkdir -p app
           cat <<EOF > app/build.gradle.kts
           plugins {
@@ -52,8 +55,8 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 9
-                  versionName = "1.9-FIX"
+                  versionCode = 20
+                  versionName = "2.0-ELITE"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
@@ -71,6 +74,7 @@ jobs:
           }
           EOF
 
+          # 5. Исходный код чата (с моделью 2.0 Flash)
           mkdir -p app/src/main/java/com/zartas/genesis
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
@@ -92,23 +96,22 @@ jobs:
           import androidx.lifecycle.viewModelScope
           import androidx.lifecycle.viewmodel.compose.viewModel
           import com.google.ai.client.generativeai.GenerativeModel
-          import com.google.ai.client.generativeai.type.RequestOptions
           import kotlinx.coroutines.flow.MutableStateFlow
           import kotlinx.coroutines.launch
 
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-              // Явно заставляем SDK использовать v1 вместо v1beta
+              // Используем Gemini 2.0 Flash Experimental - она мощнее и стабильнее сейчас
               private val model = GenerativeModel(
-                  modelName = "gemini-1.5-flash-latest", 
-                  apiKey = BuildConfig.API_KEY,
-                  requestOptions = RequestOptions(apiVersion = "v1")
+                  modelName = "gemini-2.0-flash-exp", 
+                  apiKey = BuildConfig.API_KEY
               )
 
               fun send(p: String) {
                   if (p.isBlank()) return
                   history.value += (p to true)
-                  val idx = history.value.size; history.value += ("..." to false)
+                  val idx = history.value.size
+                  history.value += ("..." to false)
                   viewModelScope.launch {
                       try {
                           val response = model.generateContent(p)
@@ -143,7 +146,7 @@ jobs:
                   Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                       Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF4285F4))
                       Spacer(Modifier.width(8.dp))
-                      Text("Genesis 1.9", style = MaterialTheme.typography.headlineSmall)
+                      Text("Genesis 2.0 Elite", style = MaterialTheme.typography.headlineSmall)
                   }
                   LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                       items(msgs) { m ->
@@ -155,7 +158,16 @@ jobs:
                       }
                   }
                   Row(modifier = Modifier.padding(16.dp).imePadding(), verticalAlignment = Alignment.CenterVertically) {
-                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f).clip(CircleShape), placeholder = { Text("Запрос...") })
+                      TextField(
+                          value = input, 
+                          onValueChange = { input = it }, 
+                          modifier = Modifier.weight(1f).clip(CircleShape), 
+                          placeholder = { Text("Запрос к Genesis...") },
+                          colors = TextFieldDefaults.colors(
+                              focusedIndicatorColor = Color.Transparent,
+                              unfocusedIndicatorColor = Color.Transparent
+                          )
+                      )
                       IconButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }) {
                           Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFFD1E3FF))
                       }
@@ -164,6 +176,7 @@ jobs:
           }
           EOF
 
+          # 6. Сборка через Gradle Wrapper
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew clean assembleDebug
@@ -171,5 +184,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-Absolute-Fix
+          name: Genesis-2.0-Elite
           path: "**/build/outputs/apk/debug/*.apk"
