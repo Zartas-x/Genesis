@@ -1,4 +1,4 @@
-name: Genesis Absolute Fix
+name: Genesis Final Fix
 on: [push]
 jobs:
   build:
@@ -7,22 +7,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+      - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.4
 
-      - name: Clean and Rebuild
+      - name: Build App
         run: |
           rm -rf app/build settings.gradle.kts build.gradle.kts gradle.properties
-          
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
@@ -49,8 +44,8 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 21
-                  versionName = "1.5-FLASH-STABLE"
+                  versionCode = 22
+                  versionName = "2.2-FINAL"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
@@ -64,7 +59,6 @@ jobs:
               implementation(platform("androidx.compose:compose-bom:2023.10.01"))
               implementation("androidx.compose.ui:ui")
               implementation("androidx.compose.material3:material3")
-              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
           }
           EOF
 
@@ -78,94 +72,59 @@ jobs:
           import androidx.compose.foundation.lazy.*
           import androidx.compose.foundation.shape.*
           import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.*
+          import androidx.compose.material.icons.filled.Send
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
           import androidx.compose.ui.*
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.unit.dp
-          import androidx.lifecycle.ViewModel
-          import androidx.lifecycle.viewModelScope
-          import androidx.lifecycle.viewmodel.compose.viewModel
           import com.google.ai.client.generativeai.GenerativeModel
-          import kotlinx.coroutines.flow.MutableStateFlow
           import kotlinx.coroutines.launch
-
-          class ChatVM : ViewModel() {
-              val history = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-              // Самая стабильная модель для API на текущий момент
-              private val model = GenerativeModel(
-                  modelName = "gemini-1.5-flash", 
-                  apiKey = BuildConfig.API_KEY
-              )
-
-              fun send(p: String) {
-                  if (p.isBlank()) return
-                  history.value += (p to true)
-                  val idx = history.value.size
-                  history.value += ("..." to false)
-                  viewModelScope.launch {
-                      try {
-                          val response = model.generateContent(p)
-                          val list = history.value.toMutableList()
-                          list[idx] = (response.text ?: "Нет ответа") to false
-                          history.value = list
-                      } catch (e: Exception) {
-                          val list = history.value.toMutableList()
-                          list[idx] = ("Ошибка: \${e.localizedMessage}") to false
-                          history.value = list
-                      }
-                  }
-              }
-          }
 
           class MainActivity : ComponentActivity() {
               override fun onCreate(s: Bundle?) {
                   super.onCreate(s)
+                  val model = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = BuildConfig.API_KEY)
                   setContent {
-                      MaterialTheme(colorScheme = darkColorScheme(surface = Color(0xFF131314))) {
-                          Surface(modifier = Modifier.fillMaxSize()) { ChatScreen() }
-                      }
-                  }
-              }
-          }
+                      val scope = rememberCoroutineScope()
+                      val history = remember { mutableStateListOf<Pair<String, Boolean>>() }
+                      var input by remember { mutableStateOf("") }
 
-          @Composable
-          fun ChatScreen(vm: ChatVM = viewModel()) {
-              val msgs by vm.history.collectAsState()
-              var input by remember { mutableStateOf("") }
-              Column(modifier = Modifier.fillMaxSize()) {
-                  Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                      Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF4285F4))
-                      Spacer(Modifier.width(8.dp))
-                      Text("Genesis Stable", style = MaterialTheme.typography.headlineSmall)
-                  }
-                  LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
-                      items(msgs) { m ->
-                          Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = if (m.second) Alignment.CenterEnd else Alignment.CenterStart) {
-                              Surface(color = if (m.second) Color(0xFF2B2B2B) else Color(0xFF1E1F20), shape = RoundedCornerShape(12.dp)) {
-                                  Text(m.first, modifier = Modifier.padding(10.dp), color = Color.White)
+                      MaterialTheme(colorScheme = darkColorScheme()) {
+                          Column(Modifier.fillMaxSize().padding(16.dp)) {
+                              Text("Genesis 2.2", style = MaterialTheme.typography.headlineMedium)
+                              LazyColumn(Modifier.weight(1f)) {
+                                  items(history) { m ->
+                                      Text(m.first, color = if(m.second) Color.Cyan else Color.White, modifier = Modifier.padding(8.dp))
+                                  }
+                              }
+                              Row(Modifier.fillMaxWidth()) {
+                                  TextField(input, { input = it }, Modifier.weight(1f))
+                                  IconButton(onClick = {
+                                      val txt = input; input = ""; history.add(txt to true)
+                                      scope.launch {
+                                          try {
+                                              val res = model.generateContent(txt)
+                                              history.add((res.text ?: "Пусто") to false)
+                                          } catch (e: Exception) {
+                                              history.add("Ошибка: \${e.localizedMessage}" to false)
+                                          }
+                                      }
+                                  }) { Icon(Icons.Default.Send, null) }
                               }
                           }
-                      }
-                  }
-                  Row(modifier = Modifier.padding(16.dp).imePadding(), verticalAlignment = Alignment.CenterVertically) {
-                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f).clip(CircleShape), placeholder = { Text("Запрос...") })
-                      IconButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }) {
-                          Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFFD1E3FF))
                       }
                   }
               }
           }
           EOF
-
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
-          ./gradlew clean assembleDebug
+          ./gradlew assembleDebug
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-Stable-Build
+          name: Genesis-Final
           path: "**/build/outputs/apk/debug/*.apk"
