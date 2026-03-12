@@ -7,18 +7,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { java-version: '17', distribution: 'temurin' }
-      - uses: gradle/actions/setup-gradle@v3
+      
+      # Устанавливаем Gradle официально, чтобы создать wrapper
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
         with: { gradle-version: 8.4 }
 
-      - name: Build
+      - name: Build App From Scratch
         run: |
-          # 1. Удаляем ВСЕ старое
+          # 1. Тотальная чистка
           rm -rf app/build settings.gradle.kts build.gradle.kts gradle.properties
           
-          # 2. Чистые конфиги
+          # 2. Настройка AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
+          # 3. Settings
           cat <<EOF > settings.gradle.kts
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
@@ -29,6 +33,7 @@ jobs:
           include(":app")
           EOF
 
+          # 4. Build.gradle.kts (Откат на стабильную 0.7.0)
           mkdir -p app
           cat <<EOF > app/build.gradle.kts
           plugins {
@@ -42,15 +47,16 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 30
-                  versionName = "3.0-STABLE"
+                  versionCode = 31
+                  versionName = "3.1-STABLE"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
               composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
           }
           dependencies {
-              // ВАЖНО: используем версию 0.7.0, она была самой стабильной по эндпоинтам
               implementation("com.google.ai.client.generativeai:generativeai:0.7.0")
               implementation("androidx.activity:activity-compose:1.8.2")
               implementation(platform("androidx.compose:compose-bom:2023.10.01"))
@@ -59,6 +65,7 @@ jobs:
           }
           EOF
 
+          # 5. Исходный код
           mkdir -p app/src/main/java/com/zartas/genesis
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
@@ -69,32 +76,37 @@ jobs:
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
           import com.google.ai.client.generativeai.GenerativeModel
           import kotlinx.coroutines.launch
 
           class MainActivity : ComponentActivity() {
               override fun onCreate(s: Bundle?) {
                   super.onCreate(s)
-                  // Используем просто "gemini-1.5-flash" без суффиксов
                   val model = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = BuildConfig.API_KEY)
                   setContent {
                       val scope = rememberCoroutineScope()
-                      var response by remember { mutableStateOf("Нажми кнопку...") }
+                      var response by remember { mutableStateOf("Нажми для проверки API...") }
                       
                       MaterialTheme(colorScheme = darkColorScheme()) {
-                          Column(Modifier.fillMaxSize()) {
-                              Text(response, modifier = Modifier.weight(1f))
-                              Button(onClick = {
-                                  response = "Думаю..."
-                                  scope.launch {
-                                      try {
-                                          val res = model.generateContent("Привет!")
-                                          response = res.text ?: "Пусто"
-                                      } catch (e: Exception) {
-                                          response = "ОШИБКА: \${e.localizedMessage}"
-                                      }
-                                  }
-                              }) { Text("ТЕСТ API") }
+                          Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF131314)) {
+                              Column(Modifier.padding(20.dp)) {
+                                  Text(response, modifier = Modifier.weight(1f), color = Color.White)
+                                  Button(
+                                      onClick = {
+                                          response = "Связываюсь с сервером..."
+                                          scope.launch {
+                                              try {
+                                                  val res = model.generateContent("Test")
+                                                  response = res.text ?: "Ответ получен, но он пустой"
+                                              } catch (e: Exception) {
+                                                  response = "ОШИБКА: \${e.localizedMessage}"
+                                              }
+                                          }
+                                      },
+                                      modifier = Modifier.fillMaxWidth()
+                                  ) { Text("ТЕСТ API") }
+                              }
                           }
                       }
                   }
@@ -102,11 +114,13 @@ jobs:
           }
           EOF
           
+          # Генерируем gradlew заново
+          gradle wrapper
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.0
+          name: Genesis-3-1-Test
           path: "**/build/outputs/apk/debug/*.apk"
