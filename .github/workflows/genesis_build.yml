@@ -16,13 +16,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Full Project Generation
+      - name: Setup Project with Fixed Gradle Version
         run: |
-          # 1. Сначала создаем ВСЕ необходимые папки
+          # 1. Создаем структуру папок
           mkdir -p app/src/main/java/com/zartas/genesis
-          mkdir -p app/src/main/res/values
+          mkdir -p gradle/wrapper
           
-          # 2. Генерируем все файлы проекта сразу
+          # 2. Явно прописываем Gradle 8.4 (версия 9.3.1 слишком новая для AGP 8.2)
+          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          # 3. Генерируем конфигурационные файлы
           cat <<EOF > settings.gradle.kts
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
@@ -67,6 +76,7 @@ jobs:
           </manifest>
           EOF
 
+          # Наш основной код с Gemini 3.1
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -100,22 +110,17 @@ jobs:
               fun send(p: String) {
                   if (p.isBlank()) return
                   val model = GenerativeModel(modelName = selectedModelName, apiKey = BuildConfig.API_KEY, requestOptions = RequestOptions(apiVersion = "v1beta"))
-                  history.value += Msg(p, true)
-                  val idx = history.value.size
-                  history.value += Msg("...", false)
+                  history.value += Msg(p, true); val idx = history.value.size; history.value += Msg("...", false)
                   viewModelScope.launch {
                       var res = ""
                       try {
                           model.generateContentStream(p).collect { chunk ->
-                              res += chunk.text ?: ""
-                              val list = history.value.toMutableList()
-                              list[idx] = Msg(res, false)
-                              history.value = list
+                              res += chunk.text ?: ""; val list = history.value.toMutableList()
+                              list[idx] = Msg(res, false); history.value = list
                           }
                       } catch (e: Exception) {
                           val list = history.value.toMutableList()
-                          list[idx] = Msg("Error: \${e.message}", false)
-                          history.value = list
+                          list[idx] = Msg("Error: \${e.message}", false); history.value = list
                       }
                   }
               }
@@ -124,22 +129,14 @@ jobs:
           class MainActivity : ComponentActivity() {
               override fun onCreate(s: Bundle?) {
                   super.onCreate(s)
-                  setContent {
-                      MaterialTheme(colorScheme = darkColorScheme()) {
-                          Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF131314)) {
-                              ChatScreen()
-                          }
-                      }
-                  }
+                  setContent { MaterialTheme(colorScheme = darkColorScheme()) { Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF131314)) { ChatScreen() } } }
               }
           }
 
           @Composable
           fun ChatScreen(vm: ChatVM = viewModel()) {
-              val msgs by vm.history.collectAsState()
-              var input by remember { mutableStateOf("") }
-              val state = rememberLazyListState()
-              var exp by remember { mutableStateOf(false) }
+              val msgs by vm.history.collectAsState(); var input by remember { mutableStateOf("") }
+              val state = rememberLazyListState(); var exp by remember { mutableStateOf(false) }
               val models = listOf("gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview")
 
               Column(modifier = Modifier.fillMaxSize().imePadding()) {
@@ -177,24 +174,24 @@ jobs:
           }
           EOF
 
-          # 3. И только теперь, когда всё готово, создаем wrapper
-          gradle wrapper --gradle-version 8.2
+          # 4. Создаем сам исполняемый файл gradlew через системный gradle
+          gradle wrapper
 
-      - name: Commit and Push Changes
+      - name: Commit and Push to Repository
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Genesis 3.1: Final Build fix" || echo "No changes"
+          git commit -m "Genesis 3.1: Force Gradle 8.4 downgrade for compatibility" || echo "No changes"
           git push origin HEAD:main
 
-      - name: Build APK
+      - name: Build APK with Gradle Wrapper
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Final-APK
+          name: Genesis-3.1-Stable
           path: app/build/outputs/apk/debug/*.apk
