@@ -21,18 +21,34 @@ jobs:
 
       - name: Radical Build Fix
         run: |
-          # 1. Удаляем дубликаты конфигов в корне, если они мешают
+          # 1. Очистка
           rm -f build.gradle.kts settings.gradle.kts
           
-          # 2. Создаем чистый settings.gradle.kts
-          echo 'rootProject.name = "Genesis"' > settings.gradle.kts
-          echo 'include(":app")' >> settings.gradle.kts
+          # 2. Создаем ПРАВИЛЬНЫЙ settings.gradle.kts с репозиториями
+          cat <<EOF > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Genesis"
+          include(":app")
+          EOF
 
-          # 3. Полная перезапись app/build.gradle.kts
+          # 3. app/build.gradle.kts с версиями плагинов
           cat <<EOF > app/build.gradle.kts
           plugins {
-              id("com.android.application")
-              id("org.jetbrains.kotlin.android")
+              id("com.android.application") version "8.2.2"
+              id("org.jetbrains.kotlin.android") version "1.9.22"
           }
           android {
               namespace = "com.zartas.genesis"
@@ -41,12 +57,12 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 5
-                  versionName = "1.5"
+                  versionCode = 6
+                  versionName = "1.6"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
-              composeOptions { kotlinCompilerExtensionVersion = "1.5.1" }
+              composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
@@ -63,7 +79,7 @@ jobs:
           }
           EOF
 
-          # 4. MainActivity с гарантированно рабочей моделью
+          # 4. MainActivity (стабильный вызов модели)
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -91,7 +107,8 @@ jobs:
 
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-              private val model = GenerativeModel(modelName = "gemini-1.5-flash-001", apiKey = BuildConfig.API_KEY)
+              // Используем базовый эндпоинт без лишних версий
+              private val model = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = BuildConfig.API_KEY)
 
               fun send(p: String) {
                   if (p.isBlank()) return
@@ -161,5 +178,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-Final-Victory
+          name: Genesis-Gemini-Final
           path: "**/build/outputs/apk/debug/*.apk"
