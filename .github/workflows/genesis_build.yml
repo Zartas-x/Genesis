@@ -14,20 +14,26 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Regenerate and Build
-        run: |
-          # 1. Если gradlew нет, создаем его через системный gradle
-          if [ ! -f "gradlew" ]; then
-            echo "Gradlew not found, generating new one..."
-            gradle wrapper --gradle-version 8.4
-          fi
+      # ПРИНУДИТЕЛЬНАЯ УСТАНОВКА GRADLE 8.4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.4
 
-          # 2. Даем права и запускаем сборку
+      - name: Build APK (Manual Fix)
+        run: |
+          # Находим корень проекта
+          PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
+          cd "$PROJECT_ROOT"
+          
+          # Генерируем новый wrapper версии 8.4 через установленный Gradle
+          gradle wrapper --gradle-version 8.4
+          
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Freedom-APK
+          name: Genesis-3.1-Final
           path: "**/build/outputs/apk/debug/*.apk"
