@@ -11,19 +11,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ШАГ 1: Обманываем систему пустой настройкой
+      # ШАГ 1: Готовим почву
       - name: Trick Gradle 9.3.1
         run: |
           touch settings.gradle.kts
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
 
-      # ШАГ 2: Создаем все файлы, включая gradle.properties для AndroidX
+      # ШАГ 2: Создаем проект с исправленными версиями Java/Kotlin
       - name: Auto-Create Genesis Project
         run: |
           mkdir -p app/src/main/java/com/zartas/genesis
           
-          # Разрешаем использование современных библиотек AndroidX
           cat <<EOF > gradle.properties
           android.useAndroidX=true
           android.enableJetifier=true
@@ -171,6 +170,11 @@ jobs:
               defaultConfig {
                   applicationId = "com.zartas.genesis"; minSdk = 24; targetSdk = 34; versionCode = 1; versionName = "1.0"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
+              }
+              # ОБНОВЛЕНО: Синхронизируем Java и Kotlin на версию 17
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
               }
               buildFeatures { compose = true; buildConfig = true }
               composeOptions { kotlinCompilerExtensionVersion = "1.5.1" }
