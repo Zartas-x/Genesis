@@ -14,26 +14,28 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # ПРИНУДИТЕЛЬНАЯ УСТАНОВКА GRADLE 8.4
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.4
 
-      - name: Build APK (Manual Fix)
+      - name: Build APK (AndroidX Fix)
         run: |
-          # Находим корень проекта
+          # 1. Находим корень проекта
           PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
           cd "$PROJECT_ROOT"
           
-          # Генерируем новый wrapper версии 8.4 через установленный Gradle
-          gradle wrapper --gradle-version 8.4
+          # 2. ВКЛЮЧАЕМ ANDROIDX (Решение твоей ошибки)
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
           
+          # 3. Генерируем wrapper и строим
+          gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Final
+          name: Genesis-3.1-Freedom
           path: "**/build/outputs/apk/debug/*.apk"
