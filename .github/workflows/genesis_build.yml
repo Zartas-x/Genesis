@@ -14,23 +14,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Flatten Structure and Build
+      - name: Force Regenerate and Build
         run: |
-          # 1. Если файлы застряли в подпапке Genesis/Genesis, вытаскиваем их в корень
-          # Ищем папку, где лежит app, и копируем всё оттуда сюда
-          PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
-          echo "Project detected in: $PROJECT_ROOT"
-          
-          if [ "$PROJECT_ROOT" != "." ]; then
-            cp -r $PROJECT_ROOT/. .
+          # 1. Если gradlew нет, создаем его через системный gradle
+          if [ ! -f "gradlew" ]; then
+            echo "Gradlew not found, generating new one..."
+            gradle wrapper --gradle-version 8.4
           fi
 
-          # 2. Теперь gradlew точно в корне. Даем права и строим.
+          # 2. Даем права и запускаем сборку
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-3.1-Final
+          name: Genesis-3.1-Freedom-APK
           path: "**/build/outputs/apk/debug/*.apk"
