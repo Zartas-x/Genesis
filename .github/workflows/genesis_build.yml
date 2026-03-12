@@ -4,177 +4,69 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Разрешаем запись файлов в репозиторий
     steps:
       - uses: actions/checkout@v4
-      
+        with:
+          fetch-depth: 0 # Нужно для корректного пуша
+
       - name: set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Generate Project and Wrapper
+      - name: Create Project Structure
         run: |
-          # 1. Создаем Gradle Wrapper (тот самый gradlew)
-          touch settings.gradle.kts
+          # Создаем обертку Gradle
           gradle wrapper --gradle-version 8.2
           
-          # 2. Создаем структуру папок
+          # Создаем папки
           mkdir -p app/src/main/java/com/zartas/genesis
           
-          # 3. Генерируем MainActivity.kt (Исправлено для 3.1 через v1beta)
+          # Генерируем код (с фиксом v1beta для 3.1)
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.setContent
-          import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
-          import androidx.compose.foundation.lazy.*
-          import androidx.compose.foundation.shape.RoundedCornerShape
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.ArrowDropDown
-          import androidx.compose.material.icons.filled.Send
           import androidx.compose.material3.*
-          import androidx.compose.runtime.*
-          import androidx.compose.ui.*
-          import androidx.compose.ui.graphics.Color
-          import androidx.compose.ui.unit.dp
-          import androidx.lifecycle.ViewModel
-          import androidx.lifecycle.viewModelScope
-          import androidx.lifecycle.viewmodel.compose.viewModel
+          import androidx.compose.ui.Modifier
           import com.google.ai.client.generativeai.GenerativeModel
           import com.google.ai.client.generativeai.type.RequestOptions
-          import kotlinx.coroutines.flow.MutableStateFlow
-          import kotlinx.coroutines.launch
-
-          data class Msg(val text: String, val isUser: Boolean)
-
-          class ChatVM : ViewModel() {
-              val history = MutableStateFlow<List<Msg>>(emptyList())
-              var selectedModelName by mutableStateOf("gemini-3.1-pro-preview")
-              
-              fun send(p: String) {
-                  if (p.isBlank()) return
-                  val currentModel = GenerativeModel(
-                      modelName = selectedModelName,
-                      apiKey = BuildConfig.API_KEY,
-                      requestOptions = RequestOptions(apiVersion = "v1beta")
-                  )
-                  
-                  history.value += Msg(p, true)
-                  val aiMsgIndex = history.value.size
-                  history.value += Msg("...", false)
-
-                  viewModelScope.launch {
-                      var fullResp = ""
-                      try {
-                          currentModel.generateContentStream(p).collect { chunk ->
-                              fullResp += chunk.text ?: ""
-                              val updated = history.value.toMutableList()
-                              updated[aiMsgIndex] = Msg(fullResp, false)
-                              history.value = updated
-                          }
-                      } catch (e: Exception) {
-                          val updated = history.value.toMutableList()
-                          updated[aiMsgIndex] = Msg("Ошибка: \${e.message}", false)
-                          history.value = updated
-                      }
-                  }
-              }
-          }
 
           class MainActivity : ComponentActivity() {
               override fun onCreate(s: Bundle?) {
                   super.onCreate(s)
-                  setContent {
-                      MaterialTheme(colorScheme = darkColorScheme()) {
-                          Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF131314)) {
-                              ChatScreen()
-                          }
-                      }
-                  }
-              }
-          }
-
-          @Composable
-          fun ChatScreen(vm: ChatVM = viewModel()) {
-              val messages by vm.history.collectAsState()
-              var input by remember { mutableStateOf("") }
-              val listState = rememberLazyListState()
-              var expanded by remember { mutableStateOf(false) }
-              val latestModels = listOf("gemini-3.1-pro-preview", "gemini-3.1-flash-lite-preview", "gemini-3-flash-preview")
-
-              LaunchedEffect(messages.size) { 
-                  if(messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1) 
-              }
-
-              Column(modifier = Modifier.fillMaxSize().imePadding()) {
-                  Row(
-                      modifier = Modifier.fillMaxWidth().padding(16.dp),
-                      horizontalArrangement = Arrangement.SpaceBetween,
-                      verticalAlignment = Alignment.CenterVertically
-                  ) {
-                      Text("Genesis 3.1", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-                      Box {
-                          Surface(color = Color(0xFF2B2B2B), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { expanded = true }) {
-                              Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                  Text(vm.selectedModelName.replace("gemini-", "").uppercase(), color = Color.Cyan)
-                                  Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color.Cyan)
-                              }
-                          }
-                          DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                              latestModels.forEach { model ->
-                                  DropdownMenuItem(text = { Text(model) }, onClick = { vm.selectedModelName = model; expanded = false })
-                              }
-                          }
-                      }
-                  }
-                  
-                  LazyColumn(state = listState, modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                      items(messages) { m ->
-                          val align = if (m.isUser) Alignment.End else Alignment.Start
-                          val color = if (m.isUser) Color(0xFF303030) else Color(0xFF1E1E1E)
-                          Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalAlignment = align) {
-                              Surface(color = color, shape = RoundedCornerShape(16.dp)) {
-                                  Text(m.text, modifier = Modifier.padding(12.dp), color = Color.White)
-                              }
-                          }
-                      }
-                  }
-
-                  Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                      TextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("Запрос к 3.1...") }, shape = RoundedCornerShape(24.dp))
-                      FloatingActionButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }, containerColor = Color(0xFFD1E3FF)) {
-                          Icon(Icons.Default.Send, contentDescription = null, tint = Color.Black)
-                      }
-                  }
+                  // Модель 3.1 требует v1beta
+                  val model = GenerativeModel(
+                      modelName = "gemini-3.1-pro-preview",
+                      apiKey = BuildConfig.API_KEY,
+                      requestOptions = RequestOptions(apiVersion = "v1beta")
+                  )
+                  setContent { Text("Genesis 3.1 is Ready") }
               }
           }
           EOF
 
-          # 4. Генерируем файлы сборки
+          # Генерируем билд-файлы
           cat <<EOF > app/build.gradle.kts
           plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
           android {
               namespace = "com.zartas.genesis"; compileSdk = 34
               defaultConfig {
-                  applicationId = "com.zartas.genesis"; minSdk = 24; targetSdk = 34; versionCode = 1; versionName = "1.1"
+                  applicationId = "com.zartas.genesis"; minSdk = 24; targetSdk = 34
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
-              compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
               buildFeatures { compose = true; buildConfig = true }
               composeOptions { kotlinCompilerExtensionVersion = "1.5.1" }
               kotlinOptions { jvmTarget = "17" }
           }
           dependencies {
-              implementation("androidx.core:core-ktx:1.12.0")
-              implementation("androidx.activity:activity-compose:1.8.2")
-              implementation(platform("androidx.compose:compose-bom:2023.10.01"))
-              implementation("androidx.compose.ui:ui"); implementation("androidx.compose.material3:material3")
               implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation("androidx.compose.material3:material3")
           }
           EOF
 
@@ -182,8 +74,23 @@ jobs:
           plugins { id("com.android.application") version "8.2.0" apply false; id("org.jetbrains.kotlin.android") version "1.9.0" apply false }
           EOF
 
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="Genesis" android:theme="@android:style/
+      - name: Commit and Push Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy Genesis 3.1 Source" || echo "No changes"
+          git push origin HEAD:main
+
+      - name: Build APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Genesis-3.1-Release
+          path: app/build/outputs/apk/debug/*.apk
