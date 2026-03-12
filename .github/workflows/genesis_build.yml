@@ -18,10 +18,16 @@ jobs:
           gradle wrapper --gradle-version 8.2
           chmod +x gradlew
 
-      # ШАГ 2: Теперь, когда у нас есть сборщик 8.2, заливаем код!
+      # ШАГ 2: Создаем все файлы, включая gradle.properties для AndroidX
       - name: Auto-Create Genesis Project
         run: |
           mkdir -p app/src/main/java/com/zartas/genesis
+          
+          # Разрешаем использование современных библиотек AndroidX
+          cat <<EOF > gradle.properties
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
           
           cat <<EOF > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -180,7 +186,7 @@ jobs:
           }
           EOF
 
-      # ШАГ 3: Собираем проект
+      # ШАГ 3: Запускаем сборку
       - name: Build APK
         run: ./gradlew assembleDebug
 
