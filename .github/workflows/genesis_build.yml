@@ -15,15 +15,21 @@ jobs:
           distribution: 'temurin'
 
       - name: Build APK
-        # Указываем путь к папке, если файлы создались внутри подпапки
-        # Если файлы лежат в корне, оставь просто ./
+        # Мы заставляем скрипт искать файлы во всех подпапках
         run: |
+          # Ищем, где на самом деле лежит gradlew
+          GRADLEW_PATH=$(find . -name gradlew)
+          GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+          
+          echo "Found gradlew in: $GRADLE_DIR"
+          cd "$GRADLE_DIR"
+          
           chmod +x gradlew
           ./gradlew assembleDebug
-        continue-on-error: false
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Genesis-3.1-Final
+          # Маска **/ найдет APK в любой подпапке билда
           path: "**/build/outputs/apk/debug/*.apk"
