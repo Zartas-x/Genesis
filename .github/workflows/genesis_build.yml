@@ -1,4 +1,4 @@
-name: Genesis Gemini Design Fixed
+name: Genesis Gemini Design Final
 on: [push]
 jobs:
   build:
@@ -24,11 +24,9 @@ jobs:
           PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
           cd "$PROJECT_ROOT"
           
-          # 1. Исправляем свойства проекта
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
 
-          # 2. ПОЛНОСТЬЮ ПЕРЕЗАПИСЫВАЕМ КОНФИГ (Фикс Java 17)
           cat <<EOF > app/build.gradle.kts
           plugins {
               id("com.android.application")
@@ -63,7 +61,6 @@ jobs:
           }
           EOF
 
-          # 3. MainActivity с дизайном Gemini (v1beta включен)
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -75,7 +72,7 @@ jobs:
           import androidx.compose.foundation.shape.CircleShape
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.AutoAwesome
+          import androidx.compose.material.icons.filled.Star
           import androidx.compose.material.icons.filled.Send
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
@@ -97,7 +94,7 @@ jobs:
 
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Msg>>(emptyList())
-              var selectedModelName by mutableStateOf("gemini-3.1-pro-preview")
+              var selectedModelName by mutableStateOf("gemini-1.5-pro-latest")
               fun send(p: String) {
                   if (p.isBlank()) return
                   val model = GenerativeModel(modelName = selectedModelName, apiKey = BuildConfig.API_KEY, requestOptions = RequestOptions(apiVersion = "v1beta"))
@@ -138,7 +135,7 @@ jobs:
 
               Column(modifier = Modifier.fillMaxSize()) {
                   Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                      Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF4285F4))
+                      Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF4285F4))
                       Spacer(Modifier.width(8.dp))
                       Text("Genesis", fontWeight = FontWeight.SemiBold, fontSize = 20.sp)
                   }
@@ -158,7 +155,7 @@ jobs:
                           value = input,
                           onValueChange = { input = it },
                           modifier = Modifier.fillMaxWidth().clip(CircleShape),
-                          placeholder = { Text("Запрос к Gemini 3.1...") },
+                          placeholder = { Text("Запрос к Gemini...") },
                           colors = TextFieldDefaults.colors(focusedContainerColor = Color(0xFF1E1F20), unfocusedContainerColor = Color(0xFF1E1F20), focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent),
                           trailingIcon = {
                               IconButton(onClick = { if(input.isNotBlank()){ vm.send(input); input = "" } }) {
@@ -171,7 +168,6 @@ jobs:
           }
           EOF
 
-          # 4. Сборка через 8.4
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -179,5 +175,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Genesis-Gemini-Final
+          name: Genesis-Gemini-Style
           path: "**/build/outputs/apk/debug/*.apk"
