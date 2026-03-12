@@ -19,17 +19,23 @@ jobs:
         with:
           gradle-version: 8.4
 
-      - name: Build APK (AndroidX Fix)
+      - name: Build APK (Java Compatibility Fix)
         run: |
           # 1. Находим корень проекта
           PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
           cd "$PROJECT_ROOT"
           
-          # 2. ВКЛЮЧАЕМ ANDROIDX (Решение твоей ошибки)
+          # 2. Фикс AndroidX
           echo "android.useAndroidX=true" > gradle.properties
           echo "android.enableJetifier=true" >> gradle.properties
           
-          # 3. Генерируем wrapper и строим
+          # 3. ПРИНУДИТЕЛЬНЫЙ ФИКС СОВМЕСТИМОСТИ JAVA (Решение твоей ошибки)
+          # Мы заменяем стандартные настройки на Java 17 для обоих компиляторов
+          sed -i 's/jvmTarget = "17"/jvmTarget = "17"/' app/build.gradle.kts
+          # Добавляем compileOptions, если они вдруг потерялись
+          sed -i '/android {/a \    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }' app/build.gradle.kts
+          
+          # 4. Сборка
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
