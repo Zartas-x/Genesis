@@ -21,10 +21,14 @@ jobs:
 
       - name: Radical Build Fix
         run: |
-          # 1. Очистка
-          rm -f build.gradle.kts settings.gradle.kts
+          # 1. Полная очистка перед созданием
+          rm -f build.gradle.kts settings.gradle.kts gradle.properties
           
-          # 2. Создаем ПРАВИЛЬНЫЙ settings.gradle.kts с репозиториями
+          # 2. Создаем настройки AndroidX (РЕШЕНИЕ ТВОЕЙ ОШИБКИ)
+          echo "android.useAndroidX=true" > gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+
+          # 3. Создаем ПРАВИЛЬНЫЙ settings.gradle.kts
           cat <<EOF > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -44,7 +48,8 @@ jobs:
           include(":app")
           EOF
 
-          # 3. app/build.gradle.kts с версиями плагинов
+          # 4. app/build.gradle.kts (БЕЗ ИЗМЕНЕНИЙ)
+          mkdir -p app
           cat <<EOF > app/build.gradle.kts
           plugins {
               id("com.android.application") version "8.2.2"
@@ -57,8 +62,8 @@ jobs:
                   applicationId = "com.zartas.genesis"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 6
-                  versionName = "1.6"
+                  versionCode = 7
+                  versionName = "1.7"
                   buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
               }
               buildFeatures { compose = true; buildConfig = true }
@@ -79,7 +84,8 @@ jobs:
           }
           EOF
 
-          # 4. MainActivity (стабильный вызов модели)
+          # 5. MainActivity
+          mkdir -p app/src/main/java/com/zartas/genesis
           cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
           package com.zartas.genesis
           import android.os.Bundle
@@ -107,7 +113,6 @@ jobs:
 
           class ChatVM : ViewModel() {
               val history = MutableStateFlow<List<Pair<String, Boolean>>>(emptyList())
-              // Используем базовый эндпоинт без лишних версий
               private val model = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = BuildConfig.API_KEY)
 
               fun send(p: String) {
@@ -170,7 +175,7 @@ jobs:
           }
           EOF
 
-          # 5. Сборка
+          # 6. Сборка
           gradle wrapper --gradle-version 8.4
           chmod +x gradlew
           ./gradlew assembleDebug
