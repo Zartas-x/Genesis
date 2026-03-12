@@ -14,16 +14,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build APK
-        # Мы заставляем скрипт искать файлы во всех подпапках
+      - name: Flatten Structure and Build
         run: |
-          # Ищем, где на самом деле лежит gradlew
-          GRADLEW_PATH=$(find . -name gradlew)
-          GRADLE_DIR=$(dirname "$GRADLEW_PATH")
+          # 1. Если файлы застряли в подпапке Genesis/Genesis, вытаскиваем их в корень
+          # Ищем папку, где лежит app, и копируем всё оттуда сюда
+          PROJECT_ROOT=$(find . -name "settings.gradle.kts" -exec dirname {} \;)
+          echo "Project detected in: $PROJECT_ROOT"
           
-          echo "Found gradlew in: $GRADLE_DIR"
-          cd "$GRADLE_DIR"
-          
+          if [ "$PROJECT_ROOT" != "." ]; then
+            cp -r $PROJECT_ROOT/. .
+          fi
+
+          # 2. Теперь gradlew точно в корне. Даем права и строим.
           chmod +x gradlew
           ./gradlew assembleDebug
 
@@ -31,5 +33,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Genesis-3.1-Final
-          # Маска **/ найдет APK в любой подпапке билда
           path: "**/build/outputs/apk/debug/*.apk"
