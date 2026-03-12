@@ -14,98 +14,15 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Force Project Creation
+      - name: Build APK with Wrapper
         run: |
-          # 1. Создаем структуру
-          mkdir -p app/src/main/java/com/zartas/genesis
-          mkdir -p gradle/wrapper
+          # Мы больше не вызываем системный gradle. 
+          # Мы используем тот, что уже лежит в твоем репозитории.
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
-          # 2. Пишем настройки (Фикс для 404 и 3.1)
-          cat <<EOF > settings.gradle.kts
-          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-          dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
-          rootProject.name = "Genesis"; include(":app")
-          EOF
-
-          cat <<EOF > build.gradle.kts
-          plugins { id("com.android.application") version "8.2.0" apply false; id("org.jetbrains.kotlin.android") version "1.9.0" apply false }
-          EOF
-
-          # 3. Конфиг Gradle (Downgrade до стабильной 8.4)
-          cat <<EOF > gradle/wrapper/gradle-wrapper.properties
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-          # 4. Код приложения (Gemini 3.1 Pro + Flash)
-          cat <<EOF > app/build.gradle.kts
-          plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
-          android {
-              namespace = "com.zartas.genesis"; compileSdk = 34
-              defaultConfig {
-                  applicationId = "com.zartas.genesis"; minSdk = 24; targetSdk = 34; versionCode = 1
-                  buildConfigField("String", "API_KEY", "\"${{ secrets.GEMINI_API_KEY }}\"")
-              }
-              buildFeatures { compose = true; buildConfig = true }
-              composeOptions { kotlinCompilerExtensionVersion = "1.5.1" }
-              kotlinOptions { jvmTarget = "17" }
-          }
-          dependencies {
-              implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-              implementation("androidx.activity:activity-compose:1.8.2")
-              implementation(platform("androidx.compose:compose-bom:2023.10.01"))
-              implementation("androidx.compose.material3:material3")
-          }
-          EOF
-
-          cat <<EOF > app/src/main/AndroidManifest.xml
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="Genesis" android:theme="@android:style/Theme.Material.NoActionBar">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          cat <<EOF > app/src/main/java/com/zartas/genesis/MainActivity.kt
-          package com.zartas.genesis
-          import android.os.Bundle
-          import androidx.activity.ComponentActivity
-          import androidx.activity.compose.setContent
-          import androidx.compose.material3.Text
-          import com.google.ai.client.generativeai.GenerativeModel
-          import com.google.ai.client.generativeai.type.RequestOptions
-
-          class MainActivity : ComponentActivity() {
-              override fun onCreate(s: Bundle?) {
-                  super.onCreate(s)
-                  // Подключение 3.1 через эндпоинт v1beta
-                  val model = GenerativeModel(
-                      modelName = "gemini-3.1-pro-preview",
-                      apiKey = BuildConfig.API_KEY,
-                      requestOptions = RequestOptions(apiVersion = "v1beta")
-                  )
-                  setContent { Text("Genesis 3.1: Freedom Online") }
-              }
-          }
-          EOF
-
-      - name: Finalize and Push
-        run: |
-          git config --global user.name "Zartas-Bot"
-          git config --global user.email "bot@zartas.ai"
-          git add .
-          git commit -m "Genesis 3.1: Final escape from Gradle 9" || echo "No changes"
-          git push origin HEAD:main
-
-      - name: Build APK
-        run: |
-          # Используем встроенный механизм сборки без вызова внешнего gradle wrapper
-          # Это самый надежный способ в нестабильных средах
-          gradle assembleDebug
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Genesis-3.1-Fixed
+          path: app/build/outputs/apk/debug/*.apk
